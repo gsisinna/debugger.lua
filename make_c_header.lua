@@ -197,24 +197,38 @@ function elua.generate(template)
 end
 
 function elua.compile(template, name)
-	local template_code = elua.generate(template)
-	
-	-- compile the template's lua code
-	local chunk, err = load(template_code, name or "COMPILED TEMPLATE", "t")
-	if err then return nil, err end
-	
-	-- wrap chunk in closure to collect and join it's output fragments
-	return function(env)
-		local fragments, append = appender{}
-		chunk(append, env)
-		return join(fragments)
-	end
+    local template_code = elua.generate(template)
+    
+    -- Check if template_code is valid
+    if not template_code then
+        return nil, "Generated code is nil"
+    end
+
+    -- compile the template's Lua code
+    local chunk, err
+    if _VERSION == "Lua 5.1" then
+        chunk, err = loadstring(template_code, name or "COMPILED TEMPLATE")
+        if chunk then
+            setfenv(chunk, { append = append, env = env })
+        end
+    else
+        chunk, err = load(template_code, name or "COMPILED TEMPLATE", "t", { append = append, env = env })
+    end
+
+    if not chunk then return nil, err end
+    
+    -- wrap chunk in closure to collect and join its output fragments
+    return function(env)
+        local fragments, append = appender{}
+        chunk(append, env)
+        return join(fragments)
+    end
 end
 
 local input_filename = arg[1] or "debugger.lua"
 local output_filename = arg[2] or "debugger_lua.h"
 
-local lua_src = io.open(input_filename):read("a")
+local lua_src = io.open(input_filename):read("*a")
 
 local chunks = {}
 local cursor, chunk_size = 1, 120;
